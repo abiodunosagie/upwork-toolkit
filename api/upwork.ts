@@ -64,6 +64,11 @@ export type Job = {
   duration: string | null
   renewedOn: Date | null
   createdOn: Date | string
+  /**
+   * When Upwork made the job public. Jobs can sit unpublished for minutes
+   * after createdOn, so this is the real start of the race to apply.
+   */
+  publishedOn?: Date | string | null
 
   // internal attribute
   __isSeen: boolean
@@ -73,6 +78,8 @@ const api = axios.create({
   adapter: 'fetch',
   withCredentials: true,
   baseURL: 'https://www.upwork.com',
+  // A stalled request must not hold a fetch cycle open past the next alarm.
+  timeout: 20 * 1000,
 })
 
 api.interceptors.response.use(logger.logRequest)
@@ -324,6 +331,49 @@ const getJobs = async (feedType: FeedType) => {
   }
 }
 
+/**
+ * Fetches several feeds and merges them, newest first, deduplicated by
+ * ciphertext. Feeds run one after another because a token refresh inside
+ * getJobs removes and re-creates cookies, which must not race. A feed that
+ * fails is skipped as long as at least one succeeds; if all fail, the first
+ * error is rethrown for the caller's error handling.
+ */
+const getJobsFromFeeds = async (feedTypes: FeedType[]): Promise<Job[]> => {
+  const batches: Job[][] = []
+  let firstError: unknown = null
+
+  for (const feedType of feedTypes) {
+    try {
+      batches.push(await getJobs(feedType))
+    } catch (error: any) {
+      firstError ??= error
+      // Keep one failing feed visible even when another feed succeeds.
+      await logger.warn([
+        'fetch_jobs',
+        feedType,
+        'feed failed:',
+        error?.message ?? String(error),
+      ])
+    }
+  }
+
+  if (batches.length === 0) {
+    throw firstError
+  }
+
+  const byId = new Map<string, Job>()
+  for (const batch of batches) {
+    for (const job of batch) {
+      if (!byId.has(job.ciphertext)) byId.set(job.ciphertext, job)
+    }
+  }
+
+  const publishedTime = (job: Job) =>
+    new Date(job.publishedOn ?? job.renewedOn ?? job.createdOn).getTime() || 0
+
+  return [...byId.values()].sort((a, b) => publishedTime(b) - publishedTime(a))
+}
+
 const viewUrl = (id: string) => `https://upwork.com/jobs/${id}`
 
 const proposalUrl = (id: string) =>
@@ -388,6 +438,7 @@ const shouldIgnoreError = (error: any) =>
 
 export default {
   getJobs,
+  getJobsFromFeeds,
   getJobsToken,
   getUsername,
   getUsernameToken,

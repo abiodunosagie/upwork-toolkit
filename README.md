@@ -103,8 +103,8 @@ disabled when their variables are unset.
 - **Authentication** — the extension uses your existing Upwork session via cookies; there's no
   separate login or OAuth flow. It calls the Upwork GraphQL API at
   `https://www.upwork.com/api/graphql/v1`.
-- **Background polling** — a service worker runs on Chrome alarms, fetching jobs roughly once a
-  minute (every few seconds in dev mode).
+- **Background polling** — a service worker runs on Chrome alarms, fetching jobs every 30
+  seconds from Most Recent plus your chosen feed (every few seconds in dev mode).
 - **Sound** — notification sounds are played through an offscreen document (required for audio in
   Manifest V3 service workers).
 - **Analytics** — Google Analytics is used only to understand how the extension itself is used. It

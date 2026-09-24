@@ -15,4 +15,25 @@ const addEventListener = (
   callback: (newJobs: Job[] | null, oldJobs: Job[] | null) => void
 ) => storage.watch<Job[]>(namespace, callback)
 
-export default { addEventListener, getAll, save }
+// Ids of every job already announced, kept apart from the 50-job display
+// cache. The cache evicts by insertion order, so without this list a job
+// pushed out by a busy feed would be announced again when it reappears.
+const seenNamespace = 'local:__SEEN_JOB_IDS'
+const SEEN_IDS_LIMIT = 500
+
+const getSeenIds = async (): Promise<string[]> =>
+  (await storage.getItem<string[]>(seenNamespace)) ?? []
+
+const rememberSeenIds = async (newIds: string[]): Promise<void> => {
+  if (newIds.length === 0) return
+  const known = await getSeenIds()
+  await storage.setItem(
+    seenNamespace,
+    [...newIds, ...known.filter((id) => !newIds.includes(id))].slice(
+      0,
+      SEEN_IDS_LIMIT
+    )
+  )
+}
+
+export default { addEventListener, getAll, save, getSeenIds, rememberSeenIds }

@@ -4,7 +4,7 @@ import { sentryVitePlugin } from '@sentry/vite-plugin'
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   manifest: {
-    name: 'Upwork toolkit - your own freelance assistant',
+    name: 'Upwork toolkit (Claude)',
     description: 'Save time and earn more with Upwork toolkit.',
     action: {
       default_icon: 'icon/32.png',
@@ -20,7 +20,7 @@ export default defineConfig({
     ],
     host_permissions: [
       'https://*.upwork.com/',
-      'https://api.openai.com/',
+      'https://api.anthropic.com/',
       'https://api.telegram.org/',
       'https://ntfy.sh/',
     ],

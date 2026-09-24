@@ -1,16 +1,16 @@
 import { Event, eventEmitter } from '@/utils/events'
 import { useEffect, useState } from 'react'
-import ChatGptDialog from './ChatGptDialog'
+import ClaudeDialog from './ClaudeDialog'
 import jobDetailsReader, { PageJobDetails } from './jobDetails'
 
 const App = (props: {
   eventEmitter: typeof eventEmitter
   onInsert: (template: string) => void
 }) => {
-  const [showChatGptDialog, setShowChatGptDialog] = useState(false)
+  const [showClaudeDialog, setShowClaudeDialog] = useState(false)
   const [jobDetails, setJobDetails] = useState<PageJobDetails | null>(null)
 
-  const openChatGptDialog = () => setShowChatGptDialog(true)
+  const openClaudeDialog = () => setShowClaudeDialog(true)
 
   const jobTitle = jobDetails?.title
   const jobDescription = jobDetails?.description
@@ -31,22 +31,22 @@ const App = (props: {
   }, [])
 
   useEffect(() => {
-    props.eventEmitter.on(Event.GENERATE_COVER_LETTER_CLICK, openChatGptDialog)
+    props.eventEmitter.on(Event.GENERATE_COVER_LETTER_CLICK, openClaudeDialog)
 
     return () => {
       props.eventEmitter.off(
         Event.GENERATE_COVER_LETTER_CLICK,
-        openChatGptDialog
+        openClaudeDialog
       )
     }
   }, [])
 
-  return showChatGptDialog && jobTitle && jobDescription ? (
-    <ChatGptDialog
-      onClose={() => setShowChatGptDialog(false)}
+  return showClaudeDialog && jobTitle && jobDescription ? (
+    <ClaudeDialog
+      onClose={() => setShowClaudeDialog(false)}
       onInsert={(template) => {
         props.onInsert(template)
-        setShowChatGptDialog(false)
+        setShowClaudeDialog(false)
       }}
       jobTitle={jobTitle}
       jobDescription={jobDescription}

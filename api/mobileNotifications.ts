@@ -33,6 +33,8 @@ export type NotificationJob = {
   // automation consumers (webhook).
   postedAgo: string
   postedAt: string | null
+  // When Upwork made the job public; the latency clock starts here.
+  publishedAt: string | null
   skills: string[]
   proposalsTier: string | null
   description: string
@@ -134,6 +136,7 @@ const toView = (job: Job): NotificationJob => ({
       : null,
   postedAgo: moment(job.renewedOn ?? job.createdOn).fromNow(),
   postedAt: toIsoDate(job.renewedOn ?? job.createdOn),
+  publishedAt: toIsoDate(job.publishedOn ?? null),
   skills: (job.attrs ?? [])
     .map((attr) => attr.prettyName)
     .filter((name): name is string => Boolean(name))

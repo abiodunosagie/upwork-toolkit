@@ -2,7 +2,10 @@ import { storage } from '#imports'
 import isFunction from 'lodash/isFunction'
 import merge from 'lodash/merge'
 
-const namespace = 'sync:__MOBILE_NOTIFICATIONS'
+// Local storage (this browser only): the config holds the Telegram bot token
+// and webhook URL, which must not be copied to other devices via sync.
+const namespace = 'local:__MOBILE_NOTIFICATIONS'
+const legacySyncNamespace = 'sync:__MOBILE_NOTIFICATIONS'
 
 export const NTFY_DEFAULT_SERVER = 'https://ntfy.sh'
 
@@ -10,7 +13,7 @@ export type MobileProvider = 'telegram' | 'ntfy' | 'webhook'
 
 /**
  * Mobile notification settings persisted in cloud storage.
- * Secrets (bot token) live here just like the OpenAI API key does.
+ * Secrets (bot token, webhook URL) live here, in local storage only.
  */
 export type MobileNotificationsConfig = {
   telegram: {
@@ -74,4 +77,31 @@ const addEventListener = (
   ) => void
 ) => storage.watch<MobileNotificationsConfig>(namespace, callback)
 
-export default { get, save, addEventListener, getDefaultConfig }
+/**
+ * One-time move of a config saved by older versions in sync storage. Keeps an
+ * existing local config if there is one, then deletes the synced copy so the
+ * secrets stop replicating.
+ */
+const migrateFromSync = async (): Promise<void> => {
+  const legacy = await storage.getItem<MobileNotificationsConfig>(
+    legacySyncNamespace
+  )
+  if (!legacy) return
+
+  const current = await storage.getItem<MobileNotificationsConfig>(namespace)
+  if (!current) {
+    await storage.setItem<MobileNotificationsConfig>(
+      namespace,
+      merge({}, getDefaultConfig(), legacy)
+    )
+  }
+  await storage.removeItem(legacySyncNamespace)
+}
+
+export default {
+  get,
+  save,
+  addEventListener,
+  getDefaultConfig,
+  migrateFromSync,
+}

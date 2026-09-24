@@ -26,11 +26,11 @@ uptoolkit/
 ├── entrypoints/
 │   ├── background/           # Service worker
 │   │   ├── index.ts          # Alarms & listeners setup
-│   │   ├── fetchJobs.ts      # Job fetching (every 1 min)
+│   │   ├── fetchJobs.ts      # Job fetching (every 30s, Most Recent + chosen feed)
 │   │   └── dailyReport.ts    # Analytics report (daily)
 │   ├── content/              # Content scripts (Upwork proposal pages)
 │   │   ├── index.tsx         # Main injection
-│   │   ├── ChatGptDialog.tsx # AI generation dialog
+│   │   ├── ClaudeDialog.tsx  # AI generation dialog
 │   │   └── GenerateButton.tsx
 │   └── options/              # Extension popup/settings
 │       ├── pages/
@@ -42,7 +42,7 @@ uptoolkit/
 │       │   └── Debug.tsx     # Hidden debug tools
 ├── api/
 │   ├── upwork.ts             # Upwork GraphQL API
-│   ├── openai.ts             # OpenAI API (AI cover letter generation)
+│   ├── claude.ts             # Claude API (AI cover letter generation)
 │   └── gqlQueries.ts         # GraphQL query definitions
 ├── utils/
 │   ├── globalState.ts        # Cloud-synced state management
@@ -62,7 +62,7 @@ uptoolkit/
 
 ### 1. Job Monitoring & Notifications
 
-- **Real-time fetching**: Every 1 minute (5s in dev mode)
+- **Real-time fetching**: Every 30 seconds (5s in dev mode). Most Recent is always polled alongside the chosen feed; jobs carry `publishedOn` so the webhook consumer can measure publish-to-alert latency.
 - **Three feed sources**:
   - My Feed / Saved Searches (custom filters)
   - Best Matches (algorithmic recommendations)
@@ -82,8 +82,8 @@ uptoolkit/
 
 ### 3. AI-Powered Cover Letter Generation
 
-- **Status**: Free — uses the user's own OpenAI API key
-- **ChatGPT integration** via a direct call to the OpenAI API (no backend)
+- **Status**: Free, uses the user's own Claude API key (local storage, this browser only)
+- **Claude integration** via the official `@anthropic-ai/sdk` from the background worker (no backend), model `claude-opus-5` with server-side refusal fallbacks
 - **Prompt template system** with variables:
   - `#{title}` - Job title
   - `#{job_description}` - Full job description
@@ -121,10 +121,10 @@ uptoolkit/
 - Cookie-based authentication
 - Queries: MyFeed, BestMatches, MostRecent, UserInfo, JobDetails
 
-### OpenAI API (`api/openai.ts`)
+### Claude API (`api/claude.ts`)
 
-- Endpoint: `https://api.openai.com/v1/chat/completions`
-- Authenticated with the user's own API key (stored in synced storage)
+- Endpoint: `https://api.anthropic.com/v1/messages` via `client.beta.messages.stream`
+- Authenticated with the user's own API key (stored in `local:` storage, never synced)
 - Streaming chat completions; cover letter generation runs through the background worker
 
 ### External Services
@@ -205,7 +205,7 @@ Synced across devices via Chrome storage:
 | Options app      | `entrypoints/options/App.tsx`         |
 | Global state     | `utils/globalState.ts`                |
 | Upwork API       | `api/upwork.ts`                       |
-| OpenAI API       | `api/openai.ts`                       |
+| Claude API       | `api/claude.ts`                       |
 | Theme config     | `theme.ts`                            |
 | WXT config       | `wxt.config.ts`                       |
 
@@ -229,7 +229,7 @@ SENTRY_PROJECT             # Sentry project
 ### File Organization
 
 - **Entrypoints**: One folder per extension context (background, content, options)
-- **API modules**: Separate file per external service (`api/upwork.ts`, `api/openai.ts`)
+- **API modules**: Separate file per external service (`api/upwork.ts`, `api/claude.ts`)
 - **Utils**: Single-responsibility utility files
 - **Components**: Reusable UI in `components/`, page-specific in `entrypoints/options/pages/`
 

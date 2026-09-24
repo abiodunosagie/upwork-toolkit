@@ -103,7 +103,7 @@ const sections: Section[] = [
     title: 'Why do I see jobs 5 or more minutes after they were posted?',
     body: (
       <>
-        Current extension calls Upwork API once every 60 seconds. If the
+        Current extension calls Upwork API once every 30 seconds. If the
         extension notifies you about a job that was posted more than a minute
         ago, it means it was added to your feed with a delay by Upwork API.
         <br />

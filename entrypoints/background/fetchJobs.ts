@@ -1,6 +1,6 @@
 import { browser } from '#imports'
 import mobileNotificationsApi from '@/api/mobileNotifications'
-import upworkApi, { Job } from '@/api/upwork'
+import upworkApi, { FeedType, Job } from '@/api/upwork'
 import colors from '@/utils/colors'
 import { ErrorType } from '@/utils/errors'
 import extension from '@/utils/extension'
@@ -28,13 +28,38 @@ const getErrorType = (error: any): ErrorType => {
   }
 }
 
+const MIN_CYCLE_GAP_MS = 20 * 1000
+
+// The service worker stays alive while an alarm handler is awaited, so this
+// flag reliably blocks a second cycle from overlapping a slow one (the
+// wall-clock guard below only covers restarts, e.g. after system wake-up).
+let cycleInFlight = false
+
 const fetchJobs = async () => {
+  if (cycleInFlight) {
+    await logger.info([
+      extension.Cycles.FETCH_JOBS,
+      'Previous cycle still in flight, exiting...',
+    ])
+    return
+  }
+
+  cycleInFlight = true
+  try {
+    await runCycle()
+  } finally {
+    cycleInFlight = false
+  }
+}
+
+const runCycle = async () => {
   const cycleId = v4().split('-').shift() as string
   const globalState = await stateStorage.get()
 
   // This check makes sure that background script doesn't run twice.
-  // E.g. after system waking up.
-  if (globalState.lastCycleStartedAt + 30 * 1000 > Date.now()) {
+  // E.g. after system waking up. Kept below the 30s alarm period so a
+  // slightly early alarm is not skipped.
+  if (globalState.lastCycleStartedAt + MIN_CYCLE_GAP_MS > Date.now()) {
     await logger.info([
       extension.Cycles.FETCH_JOBS,
       cycleId,
@@ -62,7 +87,11 @@ const fetchJobs = async () => {
   let newBatch: Job[] = []
 
   try {
-    newBatch = await upworkApi.getJobs(globalState.feedType)
+    // Most Recent is time-ordered, so brand-new jobs show up there first;
+    // the user's chosen feed is still polled alongside it.
+    newBatch = await upworkApi.getJobsFromFeeds(
+      Array.from(new Set([globalState.feedType, FeedType.MostRecent]))
+    )
   } catch (error: any) {
     const errorType = getErrorType(error)
 
@@ -104,10 +133,9 @@ const fetchJobs = async () => {
   const oldBatchIds = (Array.isArray(oldBatch) ? oldBatch : []).map(
     (job) => job.ciphertext
   )
+  const knownIds = new Set([...oldBatchIds, ...(await jobStorage.getSeenIds())])
 
-  const newJobs = newBatch.filter(
-    (job) => !oldBatchIds.includes(job.ciphertext)
-  )
+  const newJobs = newBatch.filter((job) => !knownIds.has(job.ciphertext))
 
   const newProcessedBatch = [
     ...newJobs.map((job) => ({ ...job, __isSeen: false })),
@@ -123,6 +151,7 @@ const fetchJobs = async () => {
 
   await Promise.all([
     jobStorage.save(newProcessedBatch),
+    jobStorage.rememberSeenIds(newJobs.map((job) => job.ciphertext)),
     stateStorage.save({ lastCycleError: null }),
 
     browser.action.setBadgeText({ text: String(unseenCount || '') }),

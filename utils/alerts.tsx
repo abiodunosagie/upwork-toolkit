@@ -182,7 +182,7 @@ const all: Alert[] = [
               You can now apply to jobs with custom-tailored AI generated cover
               letters
             </strong>{' '}
-            — just add you OpenAI API key by clicking the button below.
+            : just add your Claude API key by clicking the button below.
           </li>
         </Box>
 
@@ -193,7 +193,7 @@ const all: Alert[] = [
             component={RouterLink}
             to="/cover-letter"
           >
-            Set up OpenAI API key
+            Set up Claude API key
           </Button>
         </Box>
       </>

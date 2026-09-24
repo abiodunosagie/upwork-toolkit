@@ -2,7 +2,7 @@ import PromptForm from '@/components/PromptForm'
 import useMediaQuery from '@/hooks/useMediaQuery'
 import coverLetterStorage from '@/utils/coverLetter'
 import errors from '@/utils/errors'
-import openAiApiKeyStorage from '@/utils/openAiApiKey'
+import claudeApiKeyStorage from '@/utils/claudeApiKey'
 import promptStorage from '@/utils/prompt'
 import { captureException } from '@/utils/sentry'
 import { helperKey } from '@/utils/system'
@@ -21,7 +21,7 @@ import {
 import { useSnackbar } from 'notistack'
 import { useEffect, useState } from 'react'
 
-const OPENAI_API_KEYS_URL = 'https://platform.openai.com/api-keys'
+const CLAUDE_API_KEYS_URL = 'https://platform.claude.com/settings/keys'
 
 const MAX_TEXT_SIZE = 8000
 
@@ -83,7 +83,7 @@ const CoverLetter = () => {
     }
 
   const onSaveApiKey = makeSaveHandler(setSavingApiKey, async () => {
-    setSavedApiKey(await openAiApiKeyStorage.save(apiKey.trim()))
+    setSavedApiKey(await claudeApiKeyStorage.save(apiKey.trim()))
     setEditingApiKey(false)
   })
 
@@ -100,7 +100,7 @@ const CoverLetter = () => {
       const [prompt, text, apiKey] = await Promise.all([
         promptStorage.get(),
         coverLetterStorage.get(),
-        openAiApiKeyStorage.get(),
+        claudeApiKeyStorage.get(),
       ])
 
       setPrompt(prompt)
@@ -117,7 +117,7 @@ const CoverLetter = () => {
   return (
     <Box sx={{ pb: 10 }}>
       <Typography variant="h6" component="h6">
-        Use ChatGPT to apply faster with personalized cover letters
+        Use Claude to apply faster with personalized cover letters
       </Typography>
 
       {showKeyForm ? (
@@ -125,13 +125,13 @@ const CoverLetter = () => {
           {!hasApiKey && (
             <Alert severity="info" sx={{ mt: 2 }}>
               <AlertTitle>
-                Connect your OpenAI API key to start generating cover letters
+                Connect your Claude API key to start generating cover letters
               </AlertTitle>
-              Cover letters are generated with your own OpenAI account.
+              Cover letters are generated with your own Claude API account.
               <br />
               Create a key at{' '}
-              <Link href={OPENAI_API_KEYS_URL} target="_blank" rel="noopener">
-                <strong>platform.openai.com/api-keys</strong>
+              <Link href={CLAUDE_API_KEYS_URL} target="_blank" rel="noopener">
+                <strong>platform.claude.com/settings/keys</strong>
                 <OpenInNew sx={{ verticalAlign: 'middle', fontSize: '100%' }} />
               </Link>{' '}
               and paste it below.
@@ -141,8 +141,8 @@ const CoverLetter = () => {
           <TextField
             fullWidth
             sx={{ mt: 2 }}
-            label="OpenAI API key"
-            placeholder="sk-..."
+            label="Claude API key"
+            placeholder="sk-ant-..."
             value={apiKey}
             type={showApiKey ? 'text' : 'password'}
             onChange={(e) => setApiKey(e.target.value)}
@@ -191,7 +191,7 @@ const CoverLetter = () => {
           <TextField
             fullWidth
             disabled
-            label="OpenAI API key"
+            label="Claude API key"
             value={maskApiKey(savedApiKey)}
           />
 
@@ -207,7 +207,7 @@ const CoverLetter = () => {
             Create a detailed prompt below and next time you're on a job
             proposal page click "Generate" button under the cover letter input
             (you can also use "{helperKey} + Enter" as a shortcut) and let
-            ChatGPT generate a unique cover letter.
+            Claude generate a unique cover letter.
             <br />
             <br />
             You can also edit the prompt for each job separately when you apply.

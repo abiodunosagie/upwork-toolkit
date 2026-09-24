@@ -16,7 +16,7 @@ import {
 } from '@mui/material'
 import { useContext, useEffect, useRef, useState } from 'react'
 
-const ChatGptDialog = (props: {
+const ClaudeDialog = (props: {
   onClose: () => void
   jobTitle: string
   jobDescription: string
@@ -95,7 +95,7 @@ const ChatGptDialog = (props: {
         setMode('writingPrompt')
         setError(
           response.error === 'NO_API_KEY'
-            ? 'Add your OpenAI API key in the extension’s Cover letter settings to generate cover letters.'
+            ? 'Add your Claude API key in the extension’s Cover letter settings to generate cover letters.'
             : 'Cover letter generation failed. Please try again.'
         )
         finish()
@@ -211,4 +211,4 @@ const ChatGptDialog = (props: {
   )
 }
 
-export default ChatGptDialog
+export default ClaudeDialog

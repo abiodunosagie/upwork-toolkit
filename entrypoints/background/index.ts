@@ -1,8 +1,9 @@
 import { browser, defineBackground } from '#imports'
-import openAiApi from '@/api/openai'
+import claudeApi, { ClaudeRefusalError } from '@/api/claude'
 import extension, { Cycles } from '@/utils/extension'
 import stateStorage, { GlobalState } from '@/utils/globalState'
-import openAiApiKeyStorage from '@/utils/openAiApiKey'
+import claudeApiKeyStorage from '@/utils/claudeApiKey'
+import mobileNotificationsStorage from '@/utils/mobileNotifications'
 import runtime, { GenerateCoverLetterResponse } from '@/utils/runtime'
 import { captureException } from '@/utils/sentry'
 import dailyReport from './dailyReport'
@@ -16,7 +17,9 @@ const ENABLED_SCRIPTS: {
   {
     cycleName: extension.Cycles.FETCH_JOBS,
     delayInMinutes: extension.debugEnabled ? 5 / 60 : 0, // 5 seconds in dev
-    periodInMinutes: 1,
+    // 30s is the floor Chrome honours for packed extensions (unpacked has no
+    // floor). Faster polling risks Upwork rate limits on the user's account.
+    periodInMinutes: 0.5,
   },
   {
     cycleName: extension.Cycles.DAILY_REPORT,
@@ -27,11 +30,18 @@ const ENABLED_SCRIPTS: {
 
 const enableScripts = async () => {
   const alarms = await browser.alarms.getAll()
-  const alarmNames = alarms.map((alarm) => alarm.name)
 
   await Promise.all(
     ENABLED_SCRIPTS.map(async (script) => {
-      if (!alarmNames.includes(script.cycleName)) {
+      const existing = alarms.find((alarm) => alarm.name === script.cycleName)
+
+      // Alarms survive extension updates, so an alarm created with an older
+      // period must be replaced for a new period to take effect.
+      if (existing && existing.periodInMinutes !== script.periodInMinutes) {
+        await browser.alarms.clear(script.cycleName)
+      }
+
+      if (!existing || existing.periodInMinutes !== script.periodInMinutes) {
         await browser.alarms.create(script.cycleName, {
           delayInMinutes: script.delayInMinutes,
           periodInMinutes: script.periodInMinutes,
@@ -93,6 +103,8 @@ export default defineBackground({
           details.reason === chrome.runtime.OnInstalledReason.UPDATE
         ) {
           await enableScripts()
+          await claudeApiKeyStorage.removeLegacyOpenAiKey()
+          await mobileNotificationsStorage.migrateFromSync()
         }
 
         if (details.reason === chrome.runtime.OnInstalledReason.UPDATE) {
@@ -175,14 +187,14 @@ export default defineBackground({
         }
 
         try {
-          const apiKey = await openAiApiKeyStorage.get()
+          const apiKey = await claudeApiKeyStorage.get()
 
           if (!apiKey) {
             post({ type: 'error', error: 'NO_API_KEY' })
             return
           }
 
-          await openAiApi.generateCoverLetter({
+          await claudeApi.generateCoverLetter({
             apiKey,
             prompt: message.prompt,
             signal: abortController.signal,
@@ -191,12 +203,15 @@ export default defineBackground({
 
           post({ type: 'done' })
         } catch (error) {
-          // The user cancelled by closing the dialog — not an error worth reporting.
+          // The user cancelled by closing the dialog, not an error worth reporting.
           if (abortController.signal.aborted) {
             return
           }
 
-          captureException(error)
+          // A refusal is expected model behaviour; only real failures go to Sentry.
+          if (!(error instanceof ClaudeRefusalError)) {
+            captureException(error)
+          }
           post({ type: 'error', error: 'GENERATION_FAILED' })
         }
       })
