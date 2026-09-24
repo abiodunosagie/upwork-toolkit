@@ -5,7 +5,7 @@ import colors from '@/utils/colors'
 import { ErrorType } from '@/utils/errors'
 import extension from '@/utils/extension'
 import stateStorage from '@/utils/globalState'
-import jobStorage from '@/utils/jobs'
+import jobStorage, { isFreshJob } from '@/utils/jobs'
 import logger from '@/utils/logger'
 import notifications from '@/utils/notifications'
 import { captureEvent, captureException } from '@/utils/sentry'
@@ -135,11 +135,18 @@ const runCycle = async () => {
   )
   const knownIds = new Set([...oldBatchIds, ...(await jobStorage.getSeenIds())])
 
-  const newJobs = newBatch.filter((job) => !knownIds.has(job.ciphertext))
+  const now = Date.now()
+  const newJobs = newBatch.filter(
+    (job) => !knownIds.has(job.ciphertext) && isFreshJob(job, now)
+  )
 
+  // Keep only jobs still inside the freshness window, so the list and the
+  // agent focus on jobs that can still be applied to early.
   const newProcessedBatch = [
     ...newJobs.map((job) => ({ ...job, __isSeen: false })),
-    ...(oldBatch ?? []),
+    ...(Array.isArray(oldBatch) ? oldBatch : []).filter((job) =>
+      isFreshJob(job, now)
+    ),
   ].slice(0, 50)
 
   const unseenJobs = newProcessedBatch.filter((job) => !job.__isSeen)

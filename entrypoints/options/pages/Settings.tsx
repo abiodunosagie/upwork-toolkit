@@ -316,7 +316,7 @@ const Settings = () => {
 
           <ListItemText
             primary="Open proposal page on job click"
-            secondary="Proposal page will be opened in a new tab along with job details page"
+            secondary="Clicking a job opens its proposal page instead of the job details page"
           />
         </ListItem>
 

@@ -9,6 +9,7 @@ import {
 } from '@mui/material'
 import { useState } from 'react'
 import moment from 'moment/moment'
+import { jobPostedTime } from '@/utils/jobs'
 import Handshake from '@/icons/Handshake'
 import upworkApi from '@/api/upwork'
 import Toggle from '@/components/Toggle'
@@ -76,7 +77,7 @@ const Job = (props: JobCardProps & { detailed: boolean }) => {
                 color="textSecondary"
                 sx={{ whiteSpace: 'nowrap' }}
               >
-                ({moment(props.job.createdOn).fromNow()})
+                ({moment(jobPostedTime(props.job)).fromNow()})
               </Typography>
             </Typography>
           </Box>

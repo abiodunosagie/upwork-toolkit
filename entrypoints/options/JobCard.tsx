@@ -11,6 +11,7 @@ import {
   CardActionArea,
 } from '@mui/material'
 import moment from 'moment'
+import { jobPostedTime } from '@/utils/jobs'
 import Toggle from '@/components/Toggle'
 import { SxProps } from '@mui/system'
 import colors from '@/utils/colors'
@@ -132,7 +133,7 @@ const JobCard = (props: Props) => {
                 {props.job.type === 'Hourly' &&
                   props.job.durationLabel &&
                   `${capitalizeFirst(props.job.durationLabel)} • `}
-                {moment(props.job.renewedOn ?? props.job.createdOn).fromNow()}
+                {moment(jobPostedTime(props.job)).fromNow()}
               </Typography>
             </>
           }

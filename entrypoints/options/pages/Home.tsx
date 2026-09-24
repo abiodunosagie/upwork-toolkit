@@ -84,10 +84,14 @@ const Home = () => {
     })
 
   const onJobClick = (job: Job) => {
-    storage.globalState.openProposalPage &&
-      window.open(upworkApi.proposalUrl(job.ciphertext), '_blank')
-
-    window.open(upworkApi.viewUrl(job.ciphertext), '_blank')
+    // One tab per click: the apply page when that setting is on, otherwise
+    // the job details page.
+    window.open(
+      storage.globalState.openProposalPage
+        ? upworkApi.proposalUrl(job.ciphertext)
+        : upworkApi.viewUrl(job.ciphertext),
+      '_blank'
+    )
 
     setUnseenIds((unseenIds) => unseenIds.filter((id) => id !== job.ciphertext))
 

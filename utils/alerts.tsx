@@ -144,61 +144,6 @@ const all: Alert[] = [
   //     </>
   //   ),
   // },
-  {
-    id: '15',
-    variant: 'filled',
-    severity: 'info',
-    title: 'I have some good news to share 🎉',
-    titleProps: { sx: { fontWeight: 600 } },
-    renderBody: (props) => (
-      <>
-        <Box
-          component="ul"
-          sx={{
-            fontSize: '105%',
-            paddingInlineStart: 3,
-            my: 1,
-            '& li': { mt: 2 },
-          }}
-        >
-          <li>
-            <strong>
-              Upwork Toolkit is now fully open source. Check out the source code
-              on{' '}
-              <Link
-                href={import.meta.env.WXT_GITHUB_URL}
-                color="inherit"
-                target="_blank"
-                rel="noopener"
-              >
-                GitHub
-                <OpenInNew sx={{ verticalAlign: 'middle', fontSize: '100%' }} />
-              </Link>
-            </strong>
-            . Inspect it, learn from it and contribute :)
-          </li>
-          <li>
-            <strong>
-              You can now apply to jobs with custom-tailored AI generated cover
-              letters
-            </strong>{' '}
-            : just add your Claude API key by clicking the button below.
-          </li>
-        </Box>
-
-        <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            color="primary"
-            component={RouterLink}
-            to="/cover-letter"
-          >
-            Set up Claude API key
-          </Button>
-        </Box>
-      </>
-    ),
-  },
 ]
 
 export default all
