@@ -83,7 +83,7 @@ uptoolkit/
 ### 3. AI-Powered Cover Letter Generation
 
 - **Status**: Free, uses the user's own Claude API key (local storage, this browser only)
-- **Claude integration** via the official `@anthropic-ai/sdk` from the background worker (no backend), model `claude-opus-5` with server-side refusal fallbacks
+- **Claude integration** via the official `@anthropic-ai/sdk` from the background worker (no backend), model `claude-sonnet-5` with server-side refusal fallbacks
 - **Prompt template system** with variables:
   - `#{title}` - Job title
   - `#{job_description}` - Full job description

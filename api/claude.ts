@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 
-const MODEL = 'claude-opus-5'
+// Sonnet 5: short writing task, faster first token and ~2.5x cheaper than Opus 5.
+const MODEL = 'claude-sonnet-5'
 const MAX_TOKENS = 16000
 
 /** Claude declined the request; expected behaviour, not a crash to report. */
