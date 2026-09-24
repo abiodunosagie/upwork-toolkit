@@ -30,13 +30,17 @@ const getErrorType = (error: any): ErrorType => {
 
 const MIN_CYCLE_GAP_MS = 20 * 1000
 
-// The service worker stays alive while an alarm handler is awaited, so this
-// flag reliably blocks a second cycle from overlapping a slow one (the
-// wall-clock guard below only covers restarts, e.g. after system wake-up).
-let cycleInFlight = false
+// Blocks a second cycle from overlapping a slow one. It expires after
+// CYCLE_LOCK_TTL_MS so a cycle that never settles (for example a hung
+// notification sound) can never stop job fetching for good.
+const CYCLE_LOCK_TTL_MS = 90 * 1000
+let cycleStartedAtMs: number | null = null
 
 const fetchJobs = async () => {
-  if (cycleInFlight) {
+  if (
+    cycleStartedAtMs !== null &&
+    Date.now() - cycleStartedAtMs < CYCLE_LOCK_TTL_MS
+  ) {
     await logger.info([
       extension.Cycles.FETCH_JOBS,
       'Previous cycle still in flight, exiting...',
@@ -44,11 +48,20 @@ const fetchJobs = async () => {
     return
   }
 
-  cycleInFlight = true
+  if (cycleStartedAtMs !== null) {
+    await logger.warn([
+      extension.Cycles.FETCH_JOBS,
+      'Previous cycle never finished, taking over the lock',
+    ])
+  }
+
+  const startedAt = Date.now()
+  cycleStartedAtMs = startedAt
   try {
     await runCycle()
   } finally {
-    cycleInFlight = false
+    // Only release our own lock, not one a later cycle took over.
+    if (cycleStartedAtMs === startedAt) cycleStartedAtMs = null
   }
 }
 
@@ -157,6 +170,11 @@ const runCycle = async () => {
     unseenJobs.some((job) => !oldBatchIds.includes(job.ciphertext))
 
   await Promise.all([
+    jobStorage.saveLastCycle({
+      at: now,
+      scanned: newBatch.length,
+      fresh: newBatch.filter((job) => isFreshJob(job, now)).length,
+    }),
     jobStorage.save(newProcessedBatch),
     jobStorage.rememberSeenIds(newJobs.map((job) => job.ciphertext)),
     stateStorage.save({ lastCycleError: null }),

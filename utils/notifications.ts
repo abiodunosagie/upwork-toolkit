@@ -2,6 +2,8 @@ import { browser, type Browser, PublicPath } from 'wxt/browser'
 import runtime, { PlaySoundMessage } from './runtime'
 import timer from './timer'
 
+const SOUND_TIMEOUT_MS = 10 * 1000
+
 const create = (
   options: Browser.notifications.NotificationCreateOptions
 ): Promise<string> =>
@@ -80,9 +82,14 @@ const show = async (
 
   const created = await create(config)
 
+  // The offscreen page may never answer the play message; never let the
+  // sound hold up the fetch cycle.
   soundSettings.enabled &&
     soundSettings.volume &&
-    (await playSound(soundSettings.volume))
+    (await Promise.race([
+      playSound(soundSettings.volume).catch(() => undefined),
+      timer.resolveIn(SOUND_TIMEOUT_MS),
+    ]))
 
   return { created, clearedAll }
 }

@@ -49,4 +49,24 @@ const rememberSeenIds = async (newIds: string[]): Promise<void> => {
   )
 }
 
-export default { addEventListener, getAll, save, getSeenIds, rememberSeenIds }
+// Heartbeat of the last completed fetch cycle, shown on the Jobs page so an
+// empty list can be told apart from a stopped extension.
+export type LastCycle = { at: number; scanned: number; fresh: number }
+const lastCycleNamespace = 'local:__LAST_CYCLE'
+
+const getLastCycle = () => storage.getItem<LastCycle>(lastCycleNamespace)
+const saveLastCycle = (value: LastCycle) =>
+  storage.setItem(lastCycleNamespace, value)
+const watchLastCycle = (callback: (value: LastCycle | null) => void) =>
+  storage.watch<LastCycle>(lastCycleNamespace, callback)
+
+export default {
+  addEventListener,
+  getAll,
+  save,
+  getSeenIds,
+  rememberSeenIds,
+  getLastCycle,
+  saveLastCycle,
+  watchLastCycle,
+}

@@ -8,6 +8,8 @@ import colors from '@/utils/colors'
 import { ErrorType } from '@/utils/errors'
 import extension from '@/utils/extension'
 import notifications from '@/utils/notifications'
+import jobStorage, { LastCycle, MAX_JOB_AGE_MS } from '@/utils/jobs'
+import moment from 'moment'
 import {
   AlertTitle,
   Box,
@@ -37,6 +39,20 @@ const Home = () => {
 
   const [debugError, setDebugError] = useState<any>([])
   const [unseenIds, setUnseenIds] = useState<string[]>([])
+  const [lastCycle, setLastCycle] = useState<LastCycle | null>(null)
+  const [, setClock] = useState(0)
+
+  // Heartbeat: shows when Upwork was last checked, so an empty list is
+  // clearly "nothing new" rather than "extension stopped".
+  useEffect(() => {
+    jobStorage.getLastCycle().then(setLastCycle)
+    const unwatch = jobStorage.watchLastCycle(setLastCycle)
+    const tick = setInterval(() => setClock((value) => value + 1), 15 * 1000)
+    return () => {
+      unwatch()
+      clearInterval(tick)
+    }
+  }, [])
 
   const jobsHash = Array.isArray(storage.jobs)
     ? storage.jobs
@@ -327,6 +343,19 @@ const Home = () => {
           <Button onClick={() => setDebugError(null)}>Trigger error</Button>
           {debugError.map((error: any) => error)}
         </>
+      )}
+
+      {lastCycle && (
+        <Typography
+          variant="body2"
+          color="textSecondary"
+          sx={{ mb: 2 }}
+          data-testid="last-cycle"
+        >
+          Last checked Upwork {moment(lastCycle.at).fromNow()}:{' '}
+          {lastCycle.scanned} jobs scanned, {lastCycle.fresh} published in the
+          last {MAX_JOB_AGE_MS / 60000} minutes.
+        </Typography>
       )}
 
       {!lastCycleError &&
