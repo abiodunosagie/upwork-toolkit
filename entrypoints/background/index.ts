@@ -1,10 +1,8 @@
 import { browser, defineBackground } from '#imports'
-import claudeApi, { ClaudeRefusalError } from '@/api/claude'
 import extension, { Cycles } from '@/utils/extension'
 import stateStorage, { GlobalState } from '@/utils/globalState'
-import claudeApiKeyStorage from '@/utils/claudeApiKey'
 import mobileNotificationsStorage from '@/utils/mobileNotifications'
-import runtime, { GenerateCoverLetterResponse } from '@/utils/runtime'
+import runtime from '@/utils/runtime'
 import { captureException } from '@/utils/sentry'
 import { IDLE_DETECTION_SECONDS } from '@/utils/pacing'
 import fetchJobs from './fetchJobs'
@@ -105,7 +103,14 @@ export default defineBackground({
           details.reason === chrome.runtime.OnInstalledReason.UPDATE
         ) {
           await enableScripts()
-          await claudeApiKeyStorage.removeLegacyOpenAiKey()
+          // Cover letters now come from the Bid Mac app; wipe the keys and
+          // prompts earlier builds stored here.
+          await browser.storage.local.remove('__CLAUDE_API_KEY')
+          await browser.storage.sync.remove([
+            '__OPENAI_API_KEY',
+            '__COVER_LETTER_PROMPT',
+            '__COVER_LETTER',
+          ])
           await mobileNotificationsStorage.migrateFromSync()
         }
 
@@ -166,61 +171,6 @@ export default defineBackground({
 
         process()
       }
-    })
-
-    browser.runtime.onConnect.addListener((port) => {
-      if (port.name !== runtime.Message.GENERATE_COVER_LETTER) {
-        return
-      }
-
-      let connected = true
-      const abortController = new AbortController()
-
-      port.onDisconnect.addListener(() => {
-        connected = false
-        abortController.abort()
-      })
-
-      const post = (response: GenerateCoverLetterResponse) => {
-        if (connected) {
-          port.postMessage(response)
-        }
-      }
-
-      port.onMessage.addListener(async (message) => {
-        if (!runtime.isGenerateCoverLetterMessage(message)) {
-          return
-        }
-
-        try {
-          const apiKey = await claudeApiKeyStorage.get()
-
-          if (!apiKey) {
-            post({ type: 'error', error: 'NO_API_KEY' })
-            return
-          }
-
-          await claudeApi.generateCoverLetter({
-            apiKey,
-            prompt: message.prompt,
-            signal: abortController.signal,
-            onChunk: (content) => post({ type: 'chunk', content }),
-          })
-
-          post({ type: 'done' })
-        } catch (error) {
-          // The user cancelled by closing the dialog, not an error worth reporting.
-          if (abortController.signal.aborted) {
-            return
-          }
-
-          // A refusal is expected model behaviour; only real failures go to Sentry.
-          if (!(error instanceof ClaudeRefusalError)) {
-            captureException(error)
-          }
-          post({ type: 'error', error: 'GENERATION_FAILED' })
-        }
-      })
     })
   },
 })

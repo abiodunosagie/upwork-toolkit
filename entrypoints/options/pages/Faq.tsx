@@ -122,10 +122,6 @@ const sections: Section[] = [
         As a first step try reinstalling the extension and see if it's working:
         <ol>
           <li>
-            If you use cover letter template - save it in a temporary text file
-            to re-add later, as it will be erased.
-          </li>
-          <li>
             Open the extension page in{' '}
             <Link
               target="_blank"
