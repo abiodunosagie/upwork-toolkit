@@ -4,7 +4,9 @@
 
 **Core Problem**: Freelancers miss opportunities because they can't constantly monitor Upwork's job feed.
 
-**Solution**: Real-time job monitoring with intelligent notifications and AI-powered cover letter generation.
+**Solution**: Light job monitoring with notifications. Cover letters come from the separate Bid Mac app, which receives new jobs through the webhook. This fork never touches the proposal page.
+
+**Account safety (2026-09-27)**: after a "Misuse of Upwork Systems" flag, this fork checks Upwork like a person with one tab open: once a minute, one feed, only while the owner is at the Mac, and a 30 minute pause after any pushback. Do not speed it up, add feeds, or add anything that fills or submits forms.
 
 ---
 
@@ -26,28 +28,22 @@ uptoolkit/
 ├── entrypoints/
 │   ├── background/           # Service worker
 │   │   ├── index.ts          # Alarms & listeners setup
-│   │   ├── fetchJobs.ts      # Job fetching (every 30s, Most Recent + chosen feed)
-│   │   └── dailyReport.ts    # Analytics report (daily)
-│   ├── content/              # Content scripts (Upwork proposal pages)
-│   │   ├── index.tsx         # Main injection
-│   │   ├── ClaudeDialog.tsx  # AI generation dialog
-│   │   └── GenerateButton.tsx
+│   │   └── fetchJobs.ts      # Job fetching (every 60s, chosen feed only, gated by idle/pause/schedule)
 │   └── options/              # Extension popup/settings
 │       ├── pages/
 │       │   ├── Home.tsx      # Job list dashboard
 │       │   ├── Settings.tsx  # User preferences
-│       │   ├── CoverLetter.tsx   # Template editor
 │       │   ├── Faq.tsx       # Help content
 │       │   ├── Logs.tsx      # Debug logs
 │       │   └── Debug.tsx     # Hidden debug tools
 ├── api/
 │   ├── upwork.ts             # Upwork GraphQL API
-│   ├── claude.ts             # Claude API (AI cover letter generation)
 │   └── gqlQueries.ts         # GraphQL query definitions
 ├── utils/
 │   ├── globalState.ts        # Cloud-synced state management
 │   ├── jobs.ts               # Job caching
 │   ├── notifications.ts      # Desktop notifications
+│   ├── pacing.ts             # Idle interval, pause-after-error, working-hours gate
 │   ├── analytics.ts          # GA4 tracking
 │   ├── sentry.ts             # Error reporting
 │   └── logger.ts             # Application logging
@@ -62,7 +58,7 @@ uptoolkit/
 
 ### 1. Job Monitoring & Notifications
 
-- **Real-time fetching**: Every 30 seconds (5s in dev mode). Most Recent is always polled alongside the chosen feed; jobs carry `publishedOn` so the webhook consumer can measure publish-to-alert latency.
+- **Fetching**: every 60 seconds (5s first run in dev), the chosen feed only. Skipped while Chrome reports the Mac idle (5 min) or locked, outside working hours, and for 30 minutes after any Upwork error except a network error. The token cookie is loaded at most once per cycle, with no retry chain.
 - **Three feed sources**:
   - My Feed / Saved Searches (custom filters)
   - Best Matches (algorithmic recommendations)
@@ -80,30 +76,14 @@ uptoolkit/
 - US (12-hour) or 24-hour time format
 - Jobs outside schedule are cached silently
 
-### 3. AI-Powered Cover Letter Generation
-
-- **Status**: Free, uses the user's own Claude API key (local storage, this browser only)
-- **Claude integration** via the official `@anthropic-ai/sdk` from the background worker (no backend), model `claude-sonnet-5` with server-side refusal fallbacks
-- **Prompt template system** with variables:
-  - `#{title}` - Job title
-  - `#{job_description}` - Full job description
-- **Streaming generation** for real-time output
-- **Insert directly** into Upwork proposal form
-
-### 4. Cover Letter Templates
-
-- Save reusable cover letter text (max 8000 chars)
-- Auto-fills proposal form when visiting job pages
-- Editable before submission
-
-### 5. Job Browsing Interface
+### 3. Job Browsing Interface
 
 - Job cards with: title, type, budget, client info, skills
 - Compact/detailed list toggle
 - Click-through to Upwork job page
 - Optional: auto-open proposal page in new tab
 
-### 6. User Settings
+### 4. User Settings
 
 - **Master toggle**: Enable/disable extension
 - **Dark mode**: On / Off / System
@@ -119,13 +99,7 @@ uptoolkit/
 
 - GraphQL endpoint: `https://www.upwork.com/api/graphql/v1`
 - Cookie-based authentication
-- Queries: MyFeed, BestMatches, MostRecent, UserInfo, JobDetails
-
-### Claude API (`api/claude.ts`)
-
-- Endpoint: `https://api.anthropic.com/v1/messages` via `client.beta.messages.stream`
-- Authenticated with the user's own API key (stored in `local:` storage, never synced)
-- Streaming chat completions; cover letter generation runs through the background worker
+- Queries: MyFeed, BestMatches, MostRecent
 
 ### External Services
 
@@ -145,17 +119,12 @@ Synced across devices via Chrome storage:
 - `schedulingEnabled`, `schedules[]`
 - `soundSettings { enabled, volume }`
 - `usTimeFormat`
-- `instanceId`, `usernameHash`
+- `instanceId`, `pausedUntil`
 
 ### Local Storage
 
 - `__JOBS` - Cached job list (last 50)
 - `__LOGS` - Application logs (last 1000)
-
-### Synced Storage
-
-- `__COVER_LETTER` - Cover letter template
-- `__COVER_LETTER_PROMPT` - AI prompt template
 
 ---
 
@@ -172,7 +141,7 @@ Synced across devices via Chrome storage:
 
 ### Dev-Only Features
 
-- Faster fetch interval (5s vs 60s)
+- First fetch after 5s instead of at once
 - Debug analytics endpoint
 
 ### Alert System
@@ -201,11 +170,9 @@ Synced across devices via Chrome storage:
 | ---------------- | ------------------------------------- |
 | Background entry | `entrypoints/background/index.ts`     |
 | Job fetching     | `entrypoints/background/fetchJobs.ts` |
-| Content script   | `entrypoints/content/index.tsx`       |
 | Options app      | `entrypoints/options/App.tsx`         |
 | Global state     | `utils/globalState.ts`                |
 | Upwork API       | `api/upwork.ts`                       |
-| Claude API       | `api/claude.ts`                       |
 | Theme config     | `theme.ts`                            |
 | WXT config       | `wxt.config.ts`                       |
 
@@ -228,8 +195,8 @@ SENTRY_PROJECT             # Sentry project
 
 ### File Organization
 
-- **Entrypoints**: One folder per extension context (background, content, options)
-- **API modules**: Separate file per external service (`api/upwork.ts`, `api/claude.ts`)
+- **Entrypoints**: One folder per extension context (background, offscreen, options)
+- **API modules**: Separate file per external service (`api/upwork.ts`, `api/mobileNotifications.ts`)
 - **Utils**: Single-responsibility utility files
 - **Components**: Reusable UI in `components/`, page-specific in `entrypoints/options/pages/`
 
@@ -258,25 +225,23 @@ SENTRY_PROJECT             # Sentry project
 - **MUI's sx prop** for component styling
 - **Theme-aware**: Use `theme.palette`, `theme.spacing`
 - **Dark mode**: Handled via theme.ts with system detection
-- **Shadow DOM** in content scripts to isolate from Upwork styles
 
 ### Error Handling
 
 - **Sentry** for unhandled exceptions
 - **Logger** utility for debug logging
 - **Graceful degradation**: Show user-friendly alerts for errors
-- **Retry logic**: Background jobs handle transient failures
+- **No retries against Upwork**: a failed cycle pauses checks (see `utils/pacing.ts`)
 
 ### Naming Conventions
 
 - **Files**: camelCase for utils, PascalCase for components
 - **Functions**: camelCase, verb-first (`fetchJobs`, `getJobDetails`)
 - **Components**: PascalCase (`JobCard`, `ScheduleDialog`)
-- **Constants**: SCREAMING_SNAKE_CASE (`FETCH_JOBS`, `DAILY_REPORT`)
+- **Constants**: SCREAMING_SNAKE_CASE (`FETCH_JOBS`, `PAUSE_AFTER_ERROR_MS`)
 
 ### API Calls
 
 - **Axios** for HTTP requests
 - **Request logging** via logger utility
 - **Error responses** include status code and message
-- **Streaming**: Use `responseType: 'stream'` for cover letter generation
