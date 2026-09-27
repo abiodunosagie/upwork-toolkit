@@ -8,7 +8,6 @@ const GA_DEBUG_ENDPOINT = 'https://www.google-analytics.com/debug/mp/collect'
 enum Event {
   PAGE_VIEW = 'page_view',
   JOB_CLICK = 'job_click',
-  DAILY_REPORT = 'daily_report',
   DEBUG_MODE_TRIGGERED = 'debug_mode_triggered',
 }
 

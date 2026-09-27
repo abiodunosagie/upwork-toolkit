@@ -239,13 +239,3 @@ export const mostRecentQuery = `
     }
   }
 `
-
-export const userQuery = `
-  query {
-    user {
-      id
-      rid
-      nid
-    }
-  }
-`

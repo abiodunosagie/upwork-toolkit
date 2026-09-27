@@ -1,6 +1,6 @@
 import { browser } from '#imports'
 import mobileNotificationsApi from '@/api/mobileNotifications'
-import upworkApi, { FeedType, Job } from '@/api/upwork'
+import upworkApi, { Job } from '@/api/upwork'
 import colors from '@/utils/colors'
 import { ErrorType } from '@/utils/errors'
 import extension from '@/utils/extension'
@@ -8,8 +8,13 @@ import stateStorage from '@/utils/globalState'
 import jobStorage, { isFreshJob } from '@/utils/jobs'
 import logger from '@/utils/logger'
 import notifications from '@/utils/notifications'
+import {
+  IDLE_DETECTION_SECONDS,
+  isPaused,
+  isWithinSchedule,
+  pauseMsFor,
+} from '@/utils/pacing'
 import { captureEvent, captureException } from '@/utils/sentry'
-import { format } from 'date-fns'
 import { v4 } from 'uuid'
 
 const getErrorType = (error: any): ErrorType => {
@@ -28,7 +33,7 @@ const getErrorType = (error: any): ErrorType => {
   }
 }
 
-const MIN_CYCLE_GAP_MS = 20 * 1000
+const MIN_CYCLE_GAP_MS = 40 * 1000
 
 // Blocks a second cycle from overlapping a slow one. It expires after
 // CYCLE_LOCK_TTL_MS so a cycle that never settles (for example a hung
@@ -70,7 +75,7 @@ const runCycle = async () => {
   const globalState = await stateStorage.get()
 
   // This check makes sure that background script doesn't run twice.
-  // E.g. after system waking up. Kept below the 30s alarm period so a
+  // E.g. after system waking up. Kept below the 1 min alarm period so a
   // slightly early alarm is not skipped.
   if (globalState.lastCycleStartedAt + MIN_CYCLE_GAP_MS > Date.now()) {
     await logger.info([
@@ -96,17 +101,51 @@ const runCycle = async () => {
     return
   }
 
+  // Second guard behind the idle listener: alarms survive browser restarts,
+  // so a cycle can fire while the owner is away.
+  if ((await browser.idle.queryState(IDLE_DETECTION_SECONDS)) !== 'active') {
+    await logger.info([
+      extension.Cycles.FETCH_JOBS,
+      cycleId,
+      'Owner is away, not checking Upwork...',
+    ])
+    return
+  }
+
+  if (isPaused(globalState.pausedUntil, Date.now())) {
+    await logger.info([
+      extension.Cycles.FETCH_JOBS,
+      cycleId,
+      'Paused after an Upwork error, not checking...',
+    ])
+    return
+  }
+
+  // Outside working hours no request is made at all, not just no alert.
+  if (
+    !isWithinSchedule(
+      globalState.schedulingEnabled,
+      globalState.schedules,
+      new Date()
+    )
+  ) {
+    return await logger.info([
+      extension.Cycles.FETCH_JOBS,
+      cycleId,
+      'Outside of working hours, not checking Upwork...',
+    ])
+  }
+
   const oldBatch = await jobStorage.getAll()
   let newBatch: Job[] = []
 
   try {
-    // Most Recent is time-ordered, so brand-new jobs show up there first;
-    // the user's chosen feed is still polled alongside it.
-    newBatch = await upworkApi.getJobsFromFeeds(
-      Array.from(new Set([globalState.feedType, FeedType.MostRecent]))
-    )
+    // One feed per cycle: the owner's chosen feed (My Feed carries his saved
+    // searches).
+    newBatch = await upworkApi.getJobs(globalState.feedType)
   } catch (error: any) {
     const errorType = getErrorType(error)
+    const pauseMs = pauseMsFor(errorType)
 
     if (
       errorType === ErrorType.UNAUTHENTICATED &&
@@ -127,7 +166,10 @@ const runCycle = async () => {
         `${errorType}, exiting...`,
       ]),
 
-      stateStorage.save({ lastCycleError: errorType }),
+      stateStorage.save({
+        lastCycleError: errorType,
+        pausedUntil: pauseMs > 0 ? Date.now() + pauseMs : null,
+      }),
 
       errorType === ErrorType.OTHER &&
         !upworkApi.shouldIgnoreError(error) &&
@@ -177,7 +219,7 @@ const runCycle = async () => {
     }),
     jobStorage.save(newProcessedBatch),
     jobStorage.rememberSeenIds(newJobs.map((job) => job.ciphertext)),
-    stateStorage.save({ lastCycleError: null }),
+    stateStorage.save({ lastCycleError: null, pausedUntil: null }),
 
     browser.action.setBadgeText({ text: String(unseenCount || '') }),
     browser.action.setBadgeBackgroundColor({ color: colors.warning }),
@@ -191,26 +233,6 @@ const runCycle = async () => {
   ])
 
   if (!hasNewUnseenJobs) return
-
-  const currentDay = new Date().getDay()
-  const currentTime = format(new Date(), 'HH:mm:ss')
-
-  if (
-    globalState.schedulingEnabled &&
-    globalState.schedules.length > 0 &&
-    !globalState.schedules.find(
-      (schedule) =>
-        schedule.days.includes(currentDay) &&
-        format(new Date(schedule.from), 'HH:mm:00') <= currentTime &&
-        format(new Date(schedule.to), 'HH:mm:59') >= currentTime
-    )
-  ) {
-    return await logger.info([
-      extension.Cycles.FETCH_JOBS,
-      cycleId,
-      'Outside of working hours, exiting without notifying...',
-    ])
-  }
 
   const [{ created, clearedAll }] = await Promise.all([
     notifications.show(

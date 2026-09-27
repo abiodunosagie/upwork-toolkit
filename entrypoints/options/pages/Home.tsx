@@ -62,6 +62,7 @@ const Home = () => {
     : ''
 
   const lastCycleError = storage.globalState.lastCycleError
+  const pausedUntil = storage.globalState.pausedUntil
 
   const loginAttempted =
     storage.globalState.lastLoginAttemptAt &&
@@ -152,7 +153,10 @@ const Home = () => {
               rel="noreferrer noopener"
               href="https://www.upwork.com/nx/find-work"
               onClick={() =>
-                storage.setState({ lastCaptchaAttemptAt: Date.now() })
+                storage.setState({
+                  lastCaptchaAttemptAt: Date.now(),
+                  pausedUntil: null,
+                })
               }
             >
               a captcha
@@ -221,7 +225,12 @@ const Home = () => {
             variant="contained"
             rel="noreferrer noopener"
             href="https://www.upwork.com/ab/account-security/login"
-            onClick={() => storage.setState({ lastLoginAttemptAt: Date.now() })}
+            onClick={() =>
+              storage.setState({
+                lastLoginAttemptAt: Date.now(),
+                pausedUntil: null,
+              })
+            }
           >
             Login
           </Button>
@@ -343,6 +352,25 @@ const Home = () => {
           <Button onClick={() => setDebugError(null)}>Trigger error</Button>
           {debugError.map((error: any) => error)}
         </>
+      )}
+
+      {pausedUntil !== null && pausedUntil > Date.now() && (
+        <MuiAlert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => storage.setState({ pausedUntil: null })}
+            >
+              Resume now
+            </Button>
+          }
+        >
+          Upwork pushed back, so job checks are paused until{' '}
+          {moment(pausedUntil).format('HH:mm')}.
+        </MuiAlert>
       )}
 
       {lastCycle && (

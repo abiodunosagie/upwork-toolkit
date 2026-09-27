@@ -6,7 +6,7 @@ import claudeApiKeyStorage from '@/utils/claudeApiKey'
 import mobileNotificationsStorage from '@/utils/mobileNotifications'
 import runtime, { GenerateCoverLetterResponse } from '@/utils/runtime'
 import { captureException } from '@/utils/sentry'
-import dailyReport from './dailyReport'
+import { IDLE_DETECTION_SECONDS } from '@/utils/pacing'
 import fetchJobs from './fetchJobs'
 
 const ENABLED_SCRIPTS: {
@@ -17,18 +17,20 @@ const ENABLED_SCRIPTS: {
   {
     cycleName: extension.Cycles.FETCH_JOBS,
     delayInMinutes: extension.debugEnabled ? 5 / 60 : 0, // 5 seconds in dev
-    // 30s is the floor Chrome honours for packed extensions (unpacked has no
-    // floor). Faster polling risks Upwork rate limits on the user's account.
-    periodInMinutes: 0.5,
-  },
-  {
-    cycleName: extension.Cycles.DAILY_REPORT,
-    delayInMinutes: 10 / 60, // 10 seconds
-    periodInMinutes: 60 * 24, // every day
+    // Once a minute, the pace of the original store extension. Faster polling
+    // is what put the owner's account at risk on 2026-09-25.
+    periodInMinutes: 1,
   },
 ]
 
+// Cycles that older builds created and this build no longer runs. Alarms
+// survive extension updates, so they are cleared explicitly.
+const RETIRED_CYCLES = ['DAILY_REPORT']
+
+const disableFetching = () => browser.alarms.clear(extension.Cycles.FETCH_JOBS)
+
 const enableScripts = async () => {
+  await Promise.all(RETIRED_CYCLES.map((name) => browser.alarms.clear(name)))
   const alarms = await browser.alarms.getAll()
 
   await Promise.all(
@@ -54,6 +56,8 @@ const enableScripts = async () => {
 export default defineBackground({
   type: 'module',
   main() {
+    browser.idle.setDetectionInterval(IDLE_DETECTION_SECONDS)
+
     browser.action.onClicked.addListener(async () => {
       try {
         await browser.tabs.create({ url: 'options.html' })
@@ -88,8 +92,6 @@ export default defineBackground({
         switch (alarm.name) {
           case extension.Cycles.FETCH_JOBS:
             return await fetchJobs()
-          case extension.Cycles.DAILY_REPORT:
-            return await dailyReport()
         }
       } catch (error) {
         captureException(error)
@@ -124,10 +126,14 @@ export default defineBackground({
       }
     })
 
+    // Only check Upwork while the owner is at the Mac: an away, locked or
+    // sleeping Mac stops all requests until he is back.
     browser.idle.onStateChanged.addListener(async (state) => {
       try {
         if (state === 'active') {
           await enableScripts()
+        } else {
+          await disableFetching()
         }
       } catch (error) {
         captureException(error)

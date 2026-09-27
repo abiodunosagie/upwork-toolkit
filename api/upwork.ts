@@ -2,7 +2,6 @@ import { browser, type Browser } from '#imports'
 import { ErrorType } from '@/utils/errors'
 import logger from '@/utils/logger'
 import { captureException } from '@/utils/sentry'
-import timer from '@/utils/timer'
 import axios, { AxiosResponse } from 'axios'
 import isString from 'lodash/isString'
 
@@ -10,7 +9,6 @@ import {
   bestMatchesQuery,
   mostRecentQuery,
   myFeedQuery,
-  userQuery,
 } from './gqlQueries'
 
 import { BestMatches as BestMatchesResponseType } from './responses/BestMatches'
@@ -136,43 +134,45 @@ const feedOptions: FeedOptions = {
   },
 }
 
+/**
+ * Returns the bearer token cookie for `path`. When it is missing or expired,
+ * loads the matching Upwork page once, the same request the browser makes
+ * when the owner opens that page, and reads the cookie again. There is no
+ * retry: if Upwork answers with the login page, the owner is logged out and
+ * the caller pauses job checks.
+ */
 const getCookieToken = async (props: {
   path: string
-  shouldTryAgain?: boolean
   triggerCookieToken: () => Promise<AxiosResponse>
 }): Promise<Browser.cookies.Cookie | null> => {
-  const { shouldTryAgain = true, triggerCookieToken, path } = props
+  const { triggerCookieToken, path } = props
 
-  const cookies = await browser.cookies.getAll({ path })
+  const readValidCookie = async () => {
+    const cookies = await browser.cookies.getAll({ path })
+    const cookie = cookies.length
+      ? cookies.reduce(
+          (result: Browser.cookies.Cookie, current: Browser.cookies.Cookie) =>
+            (current.expirationDate as number) >
+            (result.expirationDate as number)
+              ? current
+              : result
+        )
+      : null
 
-  const cookie = cookies.length
-    ? cookies.reduce(
-        (result: Browser.cookies.Cookie, current: Browser.cookies.Cookie) =>
-          (current.expirationDate as number) > (result.expirationDate as number)
-            ? current
-            : result
-      )
-    : null
-
-  if (
-    cookie &&
-    cookie.expirationDate &&
-    cookie.expirationDate * 1000 > Date.now()
-  ) {
-    return cookie
+    return cookie &&
+      cookie.expirationDate &&
+      cookie.expirationDate * 1000 > Date.now()
+      ? cookie
+      : null
   }
 
-  if (!shouldTryAgain) {
-    return null
-  }
+  const cookie = await readValidCookie()
+  if (cookie) return cookie
 
-  await removeCookies(props.path)
-  await triggerCookieToken()
-  await timer.resolveIn(5000)
-
+  await removeCookies(path)
   const triggerResponse = await triggerCookieToken()
   if (
-    isString(triggerResponse.data.action) &&
+    isString(triggerResponse.data?.action) &&
     triggerResponse.data.action.startsWith(
       'https://www.upwork.com/ab/account-security/login'
     )
@@ -180,7 +180,7 @@ const getCookieToken = async (props: {
     return null
   }
 
-  return getCookieToken({ ...props, shouldTryAgain: false })
+  return readValidCookie()
 }
 
 const getJobsToken = () =>
@@ -306,6 +306,11 @@ const requestJobs = async (
   throw new Error('Invalid feed type')
 }
 
+/**
+ * One feed request per cycle. A 401 means the token went stale: its cookie is
+ * dropped so the next cycle after the pause loads a fresh one, and the error
+ * goes up so the cycle pauses instead of retrying at once.
+ */
 const getJobs = async (feedType: FeedType) => {
   const cookie = await getJobsToken()
 
@@ -318,102 +323,15 @@ const getJobs = async (feedType: FeedType) => {
   } catch (error) {
     if (isUnauthenticatedError(error)) {
       await removeCookies('/nx/find-work/')
-      const newCookie = await getJobsToken()
-
-      if (!newCookie) {
-        throw new Error(ErrorType.UNAUTHENTICATED)
-      }
-
-      return await requestJobs(newCookie, feedType)
-    } else {
-      throw error
     }
+    throw error
   }
-}
-
-/**
- * Fetches several feeds and merges them, newest first, deduplicated by
- * ciphertext. Feeds run one after another because a token refresh inside
- * getJobs removes and re-creates cookies, which must not race. A feed that
- * fails is skipped as long as at least one succeeds; if all fail, the first
- * error is rethrown for the caller's error handling.
- */
-const getJobsFromFeeds = async (feedTypes: FeedType[]): Promise<Job[]> => {
-  const batches: Job[][] = []
-  let firstError: unknown = null
-
-  for (const feedType of feedTypes) {
-    try {
-      batches.push(await getJobs(feedType))
-    } catch (error: any) {
-      firstError ??= error
-      // Keep one failing feed visible even when another feed succeeds.
-      await logger.warn([
-        'fetch_jobs',
-        feedType,
-        'feed failed:',
-        error?.message ?? String(error),
-      ])
-    }
-  }
-
-  if (batches.length === 0) {
-    throw firstError
-  }
-
-  const byId = new Map<string, Job>()
-  for (const batch of batches) {
-    for (const job of batch) {
-      if (!byId.has(job.ciphertext)) byId.set(job.ciphertext, job)
-    }
-  }
-
-  const publishedTime = (job: Job) =>
-    new Date(job.publishedOn ?? job.renewedOn ?? job.createdOn).getTime() || 0
-
-  return [...byId.values()].sort((a, b) => publishedTime(b) - publishedTime(a))
 }
 
 const viewUrl = (id: string) => `https://upwork.com/jobs/${id}`
 
 const proposalUrl = (id: string) =>
   `https://upwork.com/ab/proposals/job/${id}/apply`
-
-const getUsernameToken = () =>
-  getCookieToken({
-    path: '/freelancers/settings/',
-    triggerCookieToken: () =>
-      api.get('/freelancers/settings/contactInfo', { headers: pageHeaders }),
-  })
-
-const getUsername = async (): Promise<string | null> => {
-  const cookie = await getUsernameToken()
-
-  if (!cookie) {
-    throw new Error(ErrorType.UNAUTHENTICATED)
-  }
-
-  type UserResponse = {
-    data: {
-      user: {
-        id: string | null
-        rid: string | null
-        nid: string | null
-      }
-    }
-  }
-
-  const response = await api.post<UserResponse>(
-    'api/graphql/v1',
-    {
-      query: userQuery,
-      variables: { queryParams: {} },
-    },
-    { headers: { Authorization: `bearer ${cookie.value}` } }
-  )
-
-  return response.data.data.user.nid
-}
 
 const isUnauthenticatedError = (error: any) =>
   (axios.isAxiosError(error) && error.response?.status === 401) ||
@@ -438,10 +356,6 @@ const shouldIgnoreError = (error: any) =>
 
 export default {
   getJobs,
-  getJobsFromFeeds,
-  getJobsToken,
-  getUsername,
-  getUsernameToken,
   feedOptions,
   isUnauthenticatedError,
   isForbiddenError,

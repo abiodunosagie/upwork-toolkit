@@ -31,6 +31,8 @@ export type GlobalState = {
   lastCaptchaAttemptAt: number | null
   lastCycleStartedAt: number
   lastCycleError: ErrorType | null
+  // Job checks stop until this time after Upwork pushes back (see pacing.ts).
+  pausedUntil: number | null
 
   readAlerts: {
     id: string
@@ -46,7 +48,6 @@ export type GlobalState = {
   schedules: Schedule[]
   usTimeFormat: boolean
 
-  usernameHash: string | null
 }
 
 const getDefaultState = (): GlobalState => ({
@@ -63,6 +64,7 @@ const getDefaultState = (): GlobalState => ({
 
   lastCycleError: null,
   lastCycleStartedAt: 0,
+  pausedUntil: null,
 
   soundSettings: {
     volume: 100,
@@ -73,7 +75,6 @@ const getDefaultState = (): GlobalState => ({
   schedules: [],
   usTimeFormat: false,
 
-  usernameHash: null,
 })
 
 const get = () =>

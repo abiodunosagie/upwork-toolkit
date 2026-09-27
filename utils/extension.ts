@@ -5,7 +5,6 @@ const version = packageJson.version
 
 export enum Cycles {
   FETCH_JOBS = 'FETCH_JOBS',
-  DAILY_REPORT = 'DAILY_REPORT',
 }
 
 export default {

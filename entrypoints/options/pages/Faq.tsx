@@ -103,9 +103,10 @@ const sections: Section[] = [
     title: 'Why do I see jobs 5 or more minutes after they were posted?',
     body: (
       <>
-        Current extension calls Upwork API once every 30 seconds. If the
-        extension notifies you about a job that was posted more than a minute
-        ago, it means it was added to your feed with a delay by Upwork API.
+        The extension checks Upwork once a minute, only while you are at your
+        Mac, and pauses for 30 minutes whenever Upwork pushes back. If it
+        notifies you about a job that was posted more than a minute ago, Upwork
+        added it to your feed late.
         <br />
         <br />
         Some users report that purchasing Upwork Plus subscription removes this
