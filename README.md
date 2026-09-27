@@ -32,7 +32,7 @@ inside the extension.
   about the same job.
 - **Scheduled notifications** — define working-hours windows per day of the week (12- or 24-hour
   format); outside your schedule no request is made to Upwork at all.
-- **Webhook for the Bid Mac app** — new jobs are sent to Bid on 127.0.0.1, which writes the
+- **Webhook for the Bid Mac app**: new jobs are sent to Bid on 127.0.0.1, which writes the
   proposal brief. The extension itself never touches the proposal page.
 - **Job browsing UI** — job cards with compact/detailed toggle and dark mode (On / Off / System).
 - **Settings** — master on/off switch, feed source selection, sound preferences, and an option to
