@@ -74,7 +74,7 @@ uptoolkit/
 - Multiple time windows per day
 - Day-of-week selection
 - US (12-hour) or 24-hour time format
-- Jobs outside schedule are cached silently
+- Outside working hours no Upwork request is made at all
 
 ### 3. Job Browsing Interface
 
@@ -236,7 +236,7 @@ SENTRY_PROJECT             # Sentry project
 ### Naming Conventions
 
 - **Files**: camelCase for utils, PascalCase for components
-- **Functions**: camelCase, verb-first (`fetchJobs`, `getJobDetails`)
+- **Functions**: camelCase, verb-first (`fetchJobs`, `getJobs`)
 - **Components**: PascalCase (`JobCard`, `ScheduleDialog`)
 - **Constants**: SCREAMING_SNAKE_CASE (`FETCH_JOBS`, `PAUSE_AFTER_ERROR_MS`)
 

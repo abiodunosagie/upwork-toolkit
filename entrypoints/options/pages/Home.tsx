@@ -6,6 +6,7 @@ import alerts, { Alert } from '@/utils/alerts'
 import analytics from '@/utils/analytics'
 import colors from '@/utils/colors'
 import { ErrorType } from '@/utils/errors'
+import { isPaused } from '@/utils/pacing'
 import extension from '@/utils/extension'
 import notifications from '@/utils/notifications'
 import jobStorage, { LastCycle, MAX_JOB_AGE_MS } from '@/utils/jobs'
@@ -354,7 +355,7 @@ const Home = () => {
         </>
       )}
 
-      {pausedUntil !== null && pausedUntil > Date.now() && (
+      {isPaused(pausedUntil, Date.now()) && (
         <MuiAlert
           severity="info"
           sx={{ mb: 2 }}
@@ -369,7 +370,7 @@ const Home = () => {
           }
         >
           Upwork pushed back, so job checks are paused until{' '}
-          {moment(pausedUntil).format('HH:mm')}.
+          {moment(pausedUntil ?? undefined).format('HH:mm')}.
         </MuiAlert>
       )}
 

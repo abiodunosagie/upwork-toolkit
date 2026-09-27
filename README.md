@@ -31,9 +31,9 @@ inside the extension.
   **unseen-jobs badge** on the toolbar icon, and **deduplication** so you're never notified twice
   about the same job.
 - **Scheduled notifications** — define working-hours windows per day of the week (12- or 24-hour
-  format); jobs found outside your schedule are cached silently.
-- **Cover-letter templates** — save reusable cover-letter text that auto-fills the proposal form
-  when you open a job's apply page.
+  format); outside your schedule no request is made to Upwork at all.
+- **Webhook for the Bid Mac app** — new jobs are sent to Bid on 127.0.0.1, which writes the
+  proposal brief. The extension itself never touches the proposal page.
 - **Job browsing UI** — job cards with compact/detailed toggle and dark mode (On / Off / System).
 - **Settings** — master on/off switch, feed source selection, sound preferences, and an option to
   auto-open the proposal page for new jobs.
@@ -103,8 +103,9 @@ disabled when their variables are unset.
 - **Authentication** — the extension uses your existing Upwork session via cookies; there's no
   separate login or OAuth flow. It calls the Upwork GraphQL API at
   `https://www.upwork.com/api/graphql/v1`.
-- **Background polling** — a service worker runs on Chrome alarms, fetching jobs every 30
-  seconds from Most Recent plus your chosen feed (every few seconds in dev mode).
+- **Background polling** — a service worker runs on Chrome alarms, fetching your chosen feed once
+  a minute, only while you are at your Mac (paused when Chrome reports idle or locked), and never
+  for 30 minutes after Upwork returns an error.
 - **Sound** — notification sounds are played through an offscreen document (required for audio in
   Manifest V3 service workers).
 - **Analytics** — Google Analytics is used only to understand how the extension itself is used. It
