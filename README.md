@@ -103,7 +103,7 @@ disabled when their variables are unset.
 - **Authentication** — the extension uses your existing Upwork session via cookies; there's no
   separate login or OAuth flow. It calls the Upwork GraphQL API at
   `https://www.upwork.com/api/graphql/v1`.
-- **Background polling** — a service worker runs on Chrome alarms, fetching your chosen feed once
+- **Background polling**: a service worker runs on Chrome alarms, fetching your chosen feed once
   a minute, only while you are at your Mac (paused when Chrome reports idle or locked), and never
   for 30 minutes after Upwork returns an error.
 - **Sound** — notification sounds are played through an offscreen document (required for audio in
